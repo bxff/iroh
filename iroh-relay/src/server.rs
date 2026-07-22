@@ -264,11 +264,11 @@ impl ClientRequest {
     /// returns the value of the `token` URL query parameter, or `None` if
     /// the URL has no `token` parameter.
     ///
-    /// If an `Authorization` header value is not valid UTF-8 the function returns
-    /// `None` immediately, without checking later headers or the URL query.
+    /// If an `Authorization` header value is not valid UTF-8 it is skipped and
+    /// subsequent headers are still checked.
     pub fn auth_token(&self) -> Option<String> {
         for value in self.request.headers.get_all(AUTHORIZATION) {
-            let value = value.to_str().ok()?;
+            let Some(value) = value.to_str().ok() else { continue; };
             if let Some((scheme, token)) = value.split_once(' ')
                 && scheme.eq_ignore_ascii_case("Bearer")
             {

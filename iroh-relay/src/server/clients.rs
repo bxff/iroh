@@ -9,6 +9,13 @@ use n0_future::IterExt;
 use tokio::sync::mpsc::error::TrySendError;
 use tracing::{debug, trace};
 
+/// Maximum number of inactive client connections kept per endpoint.
+///
+/// When a client reconnects while an existing connection is active, the old
+/// connection is pushed to an inactive list. This cap prevents the list from
+/// growing without bound during repeated reconnection loops.
+const MAX_INACTIVE_PER_ENDPOINT: usize = 8;
+
 use super::{
     ConnectionId, OnDisconnectGuard,
     client::{Client, Config, ForwardPacketError},
@@ -89,6 +96,11 @@ impl Clients {
                 old_client
                     .try_send_health(Status::SameEndpointIdConnected)
                     .ok();
+                if state.inactive.len() >= MAX_INACTIVE_PER_ENDPOINT {
+                    let oldest = state.inactive.remove(0);
+                    oldest.start_shutdown();
+                    metrics.clients_inactive_removed.inc();
+                }
                 state.inactive.push(old_client);
                 metrics.clients_inactive_added.inc();
             }
